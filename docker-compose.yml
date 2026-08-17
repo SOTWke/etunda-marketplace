@@ -1,0 +1,100 @@
+services:
+  # PostgreSQL with PostGIS for geospatial queries (farms, routes)
+  postgres:
+    image: postgis/postgis:17-3.4-alpine
+    container_name: etunda-postgres
+    environment:
+      POSTGRES_USER: etunda
+      POSTGRES_PASSWORD: etunda_dev_pw
+      POSTGRES_DB: etunda
+      POSTGRES_INITDB_ARGS: -c timezone=UTC
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./db/init.sql:/docker-entrypoint-initdb.d/01-init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U etunda -d etunda"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - etunda
+
+  # Redis for caching, rate limiting, price feed
+  redis:
+    image: redis:7-alpine
+    container_name: etunda-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - etunda
+
+  # Next.js frontend
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: etunda-app
+    environment:
+      NODE_ENV: development
+      NEXT_PUBLIC_API_URL: http://localhost:3001
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./app:/app/app
+      - ./public:/app/public
+      - node_modules:/app/node_modules
+    develop:
+      watch:
+        - path: ./app
+          action: sync
+          target: /app/app
+        - path: ./package.json
+          action: rebuild
+    networks:
+      - etunda
+
+  # Node.js backend server (route handlers, API, webhooks)
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: etunda-api
+    environment:
+      NODE_ENV: development
+      PORT: 3001
+      DATABASE_URL: postgresql://etunda:etunda_dev_pw@postgres:5432/etunda
+      REDIS_URL: redis://redis:6379
+      WHATSAPP_TOKEN: ${WHATSAPP_TOKEN:-placeholder}
+      STRIPE_SECRET: ${STRIPE_SECRET:-placeholder}
+    ports:
+      - "3001:3001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - etunda
+
+volumes:
+  postgres_data:
+  redis_data:
+  node_modules:
+
+networks:
+  etunda:
+    driver: bridge

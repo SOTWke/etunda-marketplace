@@ -1,0 +1,10 @@
+{
+  "buildCommand": "npm run build",
+  "outputDirectory": ".next",
+  "installCommand": "npm install",
+  "env": {
+    "NEXT_PUBLIC_API_URL": "@etunda-api.RAILWAY_PUBLIC_DOMAIN",
+    "DATABASE_URL": "@postgres.DATABASE_URL",
+    "REDIS_URL": "@redis.REDIS_URL"
+  }
+}
