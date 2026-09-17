@@ -1,6 +1,7 @@
 import express, { Express, Request, Response } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
+import compression from 'compression';
 import { Pool } from 'pg';
 import { createClient } from 'redis';
 import dotenv from 'dotenv';
@@ -13,11 +14,16 @@ const PORT = process.env.PORT || 3001;
 // Middleware
 app.use(helmet());
 app.use(cors());
-app.use(express.json());
+app.use(compression());
+app.use(express.json({ limit: '100kb' }));
 
 // Database setup
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
+  max: 20,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 5000,
+  statement_timeout: 15000,
 });
 
 // Redis setup
@@ -25,19 +31,52 @@ const redis = createClient({
   url: process.env.REDIS_URL || 'redis://localhost:6379',
 });
 
+redis.on('error', (err) => console.error('Redis error:', err));
 redis.connect().catch(console.error);
 
-// Health check
-app.get('/health', (req: Request, res: Response) => {
-  res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
+// Health checks
+app.get('/health', async (_req: Request, res: Response) => {
+  try {
+    await pool.query('SELECT 1');
+    const redisReady = redis.isOpen ? 'connected' : 'disconnected';
+    res.status(200).json({
+      status: 'ok',
+      timestamp: new Date().toISOString(),
+      db: 'ok',
+      redis: redisReady,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(503).json({ status: 'error', db: 'unavailable' });
+  }
+});
+
+app.get('/ready', async (_req: Request, res: Response) => {
+  try {
+    await pool.query('SELECT 1');
+    res.status(200).json({ status: 'ready' });
+  } catch (err) {
+    console.error(err);
+    res.status(503).json({ status: 'not-ready' });
+  }
 });
 
 // API Routes
 
 // Get all farms
 app.get('/api/farms', async (req: Request, res: Response) => {
+  const pageSize = Math.min(Number(req.query.limit) || 25, 100);
+  const cursor = req.query.cursor as string | undefined;
+
   try {
-    const result = await pool.query('SELECT * FROM farms ORDER BY created_at DESC LIMIT 50');
+    const result = await pool.query(
+      `SELECT id, name, owner_name, ST_AsGeoJSON(location) AS location, size_hectares, created_at
+       FROM farms
+       WHERE ($1::timestamp IS NULL OR created_at < $1)
+       ORDER BY created_at DESC, id DESC
+       LIMIT $2`,
+      [cursor ? new Date(cursor).toISOString() : null, pageSize]
+    );
     res.json(result.rows);
   } catch (err) {
     console.error(err);
@@ -52,7 +91,7 @@ app.post('/api/farms', async (req: Request, res: Response) => {
     const result = await pool.query(
       `INSERT INTO farms (name, owner_name, location, size_hectares)
        VALUES ($1, $2, ST_GeomFromText('POINT($3 $4)', 4326), $5)
-       RETURNING *`,
+       RETURNING id, name, owner_name, ST_AsGeoJSON(location) AS location, size_hectares, created_at`,
       [name, owner_name, longitude, latitude, size_hectares]
     );
     res.status(201).json(result.rows[0]);
@@ -64,9 +103,17 @@ app.post('/api/farms', async (req: Request, res: Response) => {
 
 // Get produce lots
 app.get('/api/produce-lots', async (req: Request, res: Response) => {
+  const pageSize = Math.min(Number(req.query.limit) || 25, 100);
+  const cursor = req.query.cursor as string | undefined;
+
   try {
     const result = await pool.query(
-      'SELECT * FROM produce_lots ORDER BY harvest_date DESC LIMIT 50'
+      `SELECT id, farm_id, produce_type, harvest_date, quantity_kg, grade, moisture_percent, created_at
+       FROM produce_lots
+       WHERE ($1::date IS NULL OR harvest_date < $1)
+       ORDER BY harvest_date DESC, id DESC
+       LIMIT $2`,
+      [cursor || null, pageSize]
     );
     res.json(result.rows);
   } catch (err) {
@@ -83,7 +130,7 @@ app.post('/api/produce-lots', async (req: Request, res: Response) => {
     const result = await pool.query(
       `INSERT INTO produce_lots (farm_id, produce_type, harvest_date, quantity_kg, grade, moisture_percent)
        VALUES ($1, $2, $3, $4, $5, $6)
-       RETURNING *`,
+       RETURNING id, farm_id, produce_type, harvest_date, quantity_kg, grade, moisture_percent, created_at`,
       [farm_id, produce_type, harvest_date, quantity_kg, grade, moisture_percent]
     );
     res.status(201).json(result.rows[0]);
@@ -95,9 +142,17 @@ app.post('/api/produce-lots', async (req: Request, res: Response) => {
 
 // Get RFQs (Requests for Quotation)
 app.get('/api/rfqs', async (req: Request, res: Response) => {
+  const pageSize = Math.min(Number(req.query.limit) || 25, 100);
+  const cursor = req.query.cursor as string | undefined;
+
   try {
     const result = await pool.query(
-      'SELECT * FROM rfqs ORDER BY created_at DESC LIMIT 50'
+      `SELECT id, lot_id, buyer_email, produce_type, requested_quantity_kg, status, created_at
+       FROM rfqs
+       WHERE ($1::timestamp IS NULL OR created_at < $1)
+       ORDER BY created_at DESC, id DESC
+       LIMIT $2`,
+      [cursor ? new Date(cursor).toISOString() : null, pageSize]
     );
     res.json(result.rows);
   } catch (err) {
@@ -113,7 +168,7 @@ app.post('/api/rfqs', async (req: Request, res: Response) => {
     const result = await pool.query(
       `INSERT INTO rfqs (lot_id, buyer_email, produce_type, requested_quantity_kg, status)
        VALUES ($1, $2, $3, $4, 'open')
-       RETURNING *`,
+       RETURNING id, lot_id, buyer_email, produce_type, requested_quantity_kg, status, created_at`,
       [lot_id, buyer_email, produce_type, requested_quantity_kg]
     );
     res.status(201).json(result.rows[0]);
@@ -125,9 +180,17 @@ app.post('/api/rfqs', async (req: Request, res: Response) => {
 
 // Get quotes
 app.get('/api/quotes', async (req: Request, res: Response) => {
+  const pageSize = Math.min(Number(req.query.limit) || 25, 100);
+  const cursor = req.query.cursor as string | undefined;
+
   try {
     const result = await pool.query(
-      'SELECT * FROM quotes ORDER BY created_at DESC LIMIT 50'
+      `SELECT id, rfq_id, quoted_price_per_kg, total_price, currency, valid_until, status, created_at
+       FROM quotes
+       WHERE ($1::timestamp IS NULL OR created_at < $1)
+       ORDER BY created_at DESC, id DESC
+       LIMIT $2`,
+      [cursor ? new Date(cursor).toISOString() : null, pageSize]
     );
     res.json(result.rows);
   } catch (err) {
@@ -144,7 +207,7 @@ app.post('/api/quotes', async (req: Request, res: Response) => {
     const result = await pool.query(
       `INSERT INTO quotes (rfq_id, quoted_price_per_kg, total_price, currency, valid_until, status)
        VALUES ($1, $2, $3, $4, $5, 'pending')
-       RETURNING *`,
+       RETURNING id, rfq_id, quoted_price_per_kg, total_price, currency, valid_until, status, created_at`,
       [rfq_id, quoted_price_per_kg, total_price, currency, valid_until]
     );
     res.status(201).json(result.rows[0]);
@@ -156,9 +219,17 @@ app.post('/api/quotes', async (req: Request, res: Response) => {
 
 // Get orders
 app.get('/api/orders', async (req: Request, res: Response) => {
+  const pageSize = Math.min(Number(req.query.limit) || 25, 100);
+  const cursor = req.query.cursor as string | undefined;
+
   try {
     const result = await pool.query(
-      'SELECT * FROM orders ORDER BY created_at DESC LIMIT 50'
+      `SELECT id, quote_id, buyer_id, seller_id, status, total_amount, currency, created_at
+       FROM orders
+       WHERE ($1::timestamp IS NULL OR created_at < $1)
+       ORDER BY created_at DESC, id DESC
+       LIMIT $2`,
+      [cursor ? new Date(cursor).toISOString() : null, pageSize]
     );
     res.json(result.rows);
   } catch (err) {
@@ -174,7 +245,7 @@ app.post('/api/orders', async (req: Request, res: Response) => {
     const result = await pool.query(
       `INSERT INTO orders (quote_id, buyer_id, seller_id, status, total_amount, currency)
        VALUES ($1, $2, $3, 'pending', $4, $5)
-       RETURNING *`,
+       RETURNING id, quote_id, buyer_id, seller_id, status, total_amount, currency, created_at`,
       [quote_id, buyer_id, seller_id, total_amount, currency]
     );
     res.status(201).json(result.rows[0]);

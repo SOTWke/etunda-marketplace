@@ -71,8 +71,13 @@ CREATE TABLE IF NOT EXISTS orders (
 );
 
 -- Create indexes for common queries
-CREATE INDEX idx_farms_location ON farms USING GIST(location);
-CREATE INDEX idx_produce_lots_farm_id ON produce_lots(farm_id);
-CREATE INDEX idx_rfqs_lot_id ON rfqs(lot_id);
-CREATE INDEX idx_quotes_rfq_id ON quotes(rfq_id);
-CREATE INDEX idx_orders_status ON orders(status);
+CREATE INDEX IF NOT EXISTS idx_farms_location ON farms USING GIST(location);
+CREATE INDEX IF NOT EXISTS idx_farms_created_at ON farms(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_produce_lots_farm_id ON produce_lots(farm_id);
+CREATE INDEX IF NOT EXISTS idx_produce_lots_harvest_date ON produce_lots(harvest_date DESC);
+CREATE INDEX IF NOT EXISTS idx_rfqs_lot_id ON rfqs(lot_id);
+CREATE INDEX IF NOT EXISTS idx_rfqs_created_at ON rfqs(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_quotes_rfq_id ON quotes(rfq_id);
+CREATE INDEX IF NOT EXISTS idx_quotes_created_at ON quotes(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
+CREATE INDEX IF NOT EXISTS idx_orders_created_at ON orders(created_at DESC);
