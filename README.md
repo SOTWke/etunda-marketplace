@@ -1,21 +1,66 @@
 # eTunda Marketplace
 
-A Next.js App Router B2B agritech marketplace prototype with a responsive global-trade interface, live quote estimator, product marketplace, compliance workflow, modal lead capture, and WhatsApp enquiry action.
+A production-grade B2B agritech marketplace for global produce sourcing, quote negotiation, compliance, and fulfilment visibility.
 
-It also includes a mobile-first farmer/field-agent harvest-registration interaction, price transparency signals, and an operating-system view of sourcing, quality control, drying and distribution.
+This project is designed to run as a Vercel-hosted frontend and optionally connect to a backend API for live data, payments, and workflow automation.
 
-## Run locally
+## Stack
 
-1. Open this folder in Visual Studio Code.
-2. In the integrated terminal, run `npm install`.
-3. Run `npm run dev`.
-4. Open `http://localhost:3000`.
+- Next.js 14 (App Router)
+- TypeScript
+- Tailwind CSS
+- Framer Motion
+- NextAuth.js
+- Axios for API integration
 
-## Before production
+## Production-ready Vercel setup
 
-- Replace the placeholder WhatsApp number in `app/page.tsx`.
-- Replace remote photo URLs with licensed image assets hosted in your CDN.
-- Add a real PDF to `public/export-specs.pdf` or change the download link.
-- Connect quote calculations, lead capture, escrow, live market data and tracking to authenticated server-side APIs.
+1. Push this branch to GitHub.
+2. Import the repository in Vercel.
+3. Use the following build settings:
+   - Framework: Next.js
+   - Root directory: .
+   - Build command: npm run build
+   - Install command: npm install
+   - Output directory: .next
+4. Add environment variables in Vercel:
 
-See [ARCHITECTURE.md](ARCHITECTURE.md) for the production system design and [WIREFRAMES.md](WIREFRAMES.md) for the implemented interactive-prototype map.
+```bash
+NEXTAUTH_SECRET=replace_with_a_long_random_secret
+NEXTAUTH_URL=https://your-domain.vercel.app
+AUTH_TRUST_HOST=true
+NEXT_PUBLIC_APP_URL=https://your-domain.vercel.app
+NEXT_PUBLIC_API_URL=https://your-backend-api.com
+```
+
+5. Deploy.
+
+## Demo login
+
+Use the following local demo credentials while auth is in demo mode:
+
+- buyer@etunda.com / demo123
+- farmer@etunda.com / demo123
+- admin@etunda.com / demo123
+
+## Local development
+
+```bash
+npm install
+npm run dev
+```
+
+Open http://localhost:3000
+
+## Notes
+
+- The app is intentionally resilient when no backend is configured, so it can be deployed to Vercel without failing.
+- If you attach a backend, point NEXT_PUBLIC_API_URL to it and the platform will use live data automatically.
+- Replace the WhatsApp number and content with your business contact before production launch.
+
+## Recommended follow-up
+
+- Deploy the backend and database separately on a platform such as Railway, Supabase, or Neon.
+- Connect auth to a real DB-backed authentication provider.
+- Replace demo marketplace data with live catalog and order APIs.
+- Add analytics and monitoring after launch.
