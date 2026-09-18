@@ -2,15 +2,78 @@
 @tailwind components;
 @tailwind utilities;
 
-:root { color-scheme: dark; }
-* { box-sizing: border-box; }
-html { scroll-behavior: smooth; }
-body { margin: 0; background: #0D1F17; color: #fff; font-family: Arial, Helvetica, sans-serif; }
-::selection { background: #00FF87; color: #0D1F17; }
-.grid-bg { background-image: linear-gradient(rgba(150,255,199,.06) 1px, transparent 1px), linear-gradient(90deg, rgba(150,255,199,.06) 1px, transparent 1px); background-size: 42px 42px; }
-.glass { background: linear-gradient(135deg, rgba(255,255,255,.11), rgba(255,255,255,.035)); border: 1px solid rgba(208,255,228,.16); backdrop-filter: blur(16px); }
-.ticker { animation: ticker 30s linear infinite; }
-@keyframes ticker { to { transform: translateX(-50%); } }
-.input-aero { width: 100%; border-radius: .375rem; border: 1px solid rgba(255,255,255,.15); background: rgba(255,255,255,.05); padding: .75rem; color: white; font-size: .875rem; outline: none; }
-.input-aero:focus { border-color: #00FF87; }
-.input-aero option { background: #0D1F17; }
+:root {
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  background:
+    radial-gradient(circle at top, rgba(183, 255, 119, 0.08), transparent 25%),
+    #061b14;
+  color: #ffffff;
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+::selection {
+  background: #b7ff77;
+  color: #061b14;
+}
+
+.hero-glow {
+  background:
+    radial-gradient(circle at 15% 10%, rgba(183, 255, 119, 0.18), transparent 20%),
+    radial-gradient(circle at 80% 20%, rgba(74, 135, 255, 0.16), transparent 24%),
+    radial-gradient(circle at 50% 100%, rgba(92, 255, 170, 0.06), transparent 35%);
+}
+
+.soft-panel {
+  background: linear-gradient(135deg, rgba(255,255,255,0.08), rgba(255,255,255,0.02));
+  border: 1px solid rgba(255,255,255,0.08);
+  backdrop-filter: blur(12px);
+}
+
+.grid-bg {
+  background-image: linear-gradient(rgba(185, 255, 119, 0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(185, 255, 119, 0.04) 1px, transparent 1px);
+  background-size: 42px 42px;
+}
+
+.ticker-track {
+  animation: ticker 28s linear infinite;
+}
+
+@keyframes ticker {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.input-aero {
+  width: 100%;
+  border-radius: 1rem;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(13, 32, 27, 0.9);
+  padding: 0.9rem 0.9rem;
+  color: white;
+  font-size: 0.875rem;
+  outline: none;
+}
+
+.input-aero:focus {
+  border-color: #b7ff77;
+}
+
+.input-aero option {
+  background: #061b14;
+}
