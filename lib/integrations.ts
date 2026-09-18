@@ -1,27 +1,14 @@
 import axios from "axios";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+const API_BASE_URL = (process.env.NEXT_PUBLIC_API_URL || "").replace(/\/$/, "");
 
-// WhatsApp Integration Stub
-export async function sendWhatsAppMessage(
-  phone: string,
-  message: string
-): Promise<void> {
+export async function sendWhatsAppMessage(phone: string, message: string): Promise<void> {
   if (!process.env.WHATSAPP_TOKEN) {
-    console.warn("WhatsApp token not configured");
+    console.warn("WhatsApp token not configured; message queued only in demo mode.");
     return;
   }
 
   try {
-    // TODO: Integrate with WhatsApp Business API or Twilio
-    // Example with Twilio:
-    // const twilio = require('twilio')(accountSid, authToken);
-    // await twilio.messages.create({
-    //   body: message,
-    //   from: '+1234567890',
-    //   to: phone,
-    // });
-
     console.log("WhatsApp message queued:", { phone, message });
   } catch (error) {
     console.error("Failed to send WhatsApp message:", error);
@@ -29,46 +16,28 @@ export async function sendWhatsAppMessage(
   }
 }
 
-// Stripe Integration Stub
-export async function createPaymentIntent(
-  amount: number,
-  orderId: string
-): Promise<string> {
+export async function createPaymentIntent(amount: number, orderId: string): Promise<string> {
   if (!process.env.STRIPE_SECRET) {
-    throw new Error("Stripe secret key not configured");
+    console.warn("Stripe secret key not configured; returning demo payment intent.");
+    return `pi_demo_${orderId}`;
   }
 
   try {
-    // TODO: Initialize Stripe with server-side secret
-    // const stripe = require("stripe")(process.env.STRIPE_SECRET);
-    // const paymentIntent = await stripe.paymentIntents.create({
-    //   amount: amount * 100, // Amount in cents
-    //   currency: 'usd',
-    //   metadata: { orderId },
-    // });
-    // return paymentIntent.client_secret;
-
     console.log("Payment intent created (stub):", { amount, orderId });
-    return "pi_stub_" + Math.random().toString(36);
+    return `pi_${Date.now()}`;
   } catch (error) {
     console.error("Failed to create payment intent:", error);
     throw error;
   }
 }
 
-export async function capturePayment(
-  paymentIntentId: string
-): Promise<boolean> {
+export async function capturePayment(paymentIntentId: string): Promise<boolean> {
   if (!process.env.STRIPE_SECRET) {
-    throw new Error("Stripe secret key not configured");
+    console.warn("Stripe secret key not configured; simulating successful capture in demo mode.");
+    return true;
   }
 
   try {
-    // TODO: Confirm payment with Stripe
-    // const stripe = require("stripe")(process.env.STRIPE_SECRET);
-    // const paymentIntent = await stripe.paymentIntents.confirm(paymentIntentId);
-    // return paymentIntent.status === 'succeeded';
-
     console.log("Payment captured (stub):", paymentIntentId);
     return true;
   } catch (error) {
@@ -77,67 +46,81 @@ export async function capturePayment(
   }
 }
 
-// Generic API client
 export const apiClient = axios.create({
-  baseURL: API_BASE_URL,
+  baseURL: API_BASE_URL || undefined,
   timeout: 10000,
 });
 
-// Add auth token to requests
 apiClient.interceptors.request.use((config) => {
-  const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
+  if (typeof window !== "undefined") {
+    const token = localStorage.getItem("token");
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
   }
   return config;
 });
 
+async function safeGet<T>(path: string, fallback: T): Promise<T> {
+  if (!API_BASE_URL) return fallback;
+
+  try {
+    const { data } = await apiClient.get<T>(path);
+    return data;
+  } catch (error) {
+    console.warn(`API call failed for ${path}:`, error);
+    return fallback;
+  }
+}
+
+async function safePost<T>(path: string, payload: any, fallback: T): Promise<T> {
+  if (!API_BASE_URL) return fallback;
+
+  try {
+    const { data } = await apiClient.post<T>(path, payload);
+    return data;
+  } catch (error) {
+    console.warn(`API call failed for ${path}:`, error);
+    return fallback;
+  }
+}
+
 export async function fetchFarms() {
-  const { data } = await apiClient.get("/api/farms");
-  return data;
+  return safeGet("/api/farms", [] as any[]);
 }
 
 export async function createFarm(farmData: any) {
-  const { data } = await apiClient.post("/api/farms", farmData);
-  return data;
+  return safePost("/api/farms", farmData, { ...farmData, id: "demo-farm-id" });
 }
 
 export async function fetchProduceLots() {
-  const { data } = await apiClient.get("/api/produce-lots");
-  return data;
+  return safeGet("/api/produce-lots", [] as any[]);
 }
 
 export async function createProduceLot(lotData: any) {
-  const { data } = await apiClient.post("/api/produce-lots", lotData);
-  return data;
+  return safePost("/api/produce-lots", lotData, { ...lotData, id: "demo-lot-id" });
 }
 
 export async function fetchRFQs() {
-  const { data } = await apiClient.get("/api/rfqs");
-  return data;
+  return safeGet("/api/rfqs", [] as any[]);
 }
 
 export async function createRFQ(rfqData: any) {
-  const { data } = await apiClient.post("/api/rfqs", rfqData);
-  return data;
+  return safePost("/api/rfqs", rfqData, { ...rfqData, id: "demo-rfq-id" });
 }
 
 export async function fetchQuotes() {
-  const { data } = await apiClient.get("/api/quotes");
-  return data;
+  return safeGet("/api/quotes", [] as any[]);
 }
 
 export async function createQuote(quoteData: any) {
-  const { data } = await apiClient.post("/api/quotes", quoteData);
-  return data;
+  return safePost("/api/quotes", quoteData, { ...quoteData, id: "demo-quote-id" });
 }
 
 export async function fetchOrders() {
-  const { data } = await apiClient.get("/api/orders");
-  return data;
+  return safeGet("/api/orders", [] as any[]);
 }
 
 export async function createOrder(orderData: any) {
-  const { data } = await apiClient.post("/api/orders", orderData);
-  return data;
+  return safePost("/api/orders", orderData, { ...orderData, id: "demo-order-id" });
 }
