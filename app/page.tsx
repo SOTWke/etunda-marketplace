@@ -5,7 +5,6 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowRight,
   BadgeCheck,
-  Check,
   ChevronDown,
   ClipboardCheck,
   FileCheck2,
@@ -17,12 +16,12 @@ import {
   ShieldCheck,
   Ship,
   Sparkles,
-  Sun,
   ThermometerSnowflake,
   Truck,
   Wheat,
   X,
 } from "lucide-react";
+import { createFarm, createRFQ } from "../lib/integrations";
 
 const products = [
   {
@@ -104,13 +103,6 @@ const processSteps = [
   { icon: Wheat, title: "Source & harvest", copy: "Vetted farmer groups, quality grading, and yield planning." },
   { icon: ClipboardCheck, title: "Inspect & sort", copy: "Cold-chain checks, lot capture, and export readiness reviews." },
   { icon: Truck, title: "Ship & deliver", copy: "Transparent route planning with accountable delivery updates." },
-];
-
-const metrics = [
-  { label: "Verified farms", value: "2.8k" },
-  { label: "Trade routes", value: "16" },
-  { label: "Avg. lead time", value: "4.2d" },
-  { label: "Quote win rate", value: "96%" },
 ];
 
 export default function Page() {
@@ -572,9 +564,43 @@ export default function Page() {
 }
 
 function TradeModal({ close }: { close: () => void }) {
-  const submit = (e: FormEvent) => {
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [done, setDone] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const submit = async (e: FormEvent) => {
     e.preventDefault();
-    close();
+    setIsSubmitting(true);
+    setError(null);
+
+    const form = e.currentTarget as HTMLFormElement;
+    const formData = new FormData(form);
+
+    try {
+      const buyer_email = String(formData.get("email") || "").trim();
+      const buyer_name = String(formData.get("name") || "").trim();
+      const company = String(formData.get("company") || "").trim();
+      const produce_type = String(formData.get("produce") || "Hass Avocado").trim();
+
+      if (!buyer_email || !buyer_name || !company) {
+        throw new Error("Please complete the required fields.");
+      }
+
+      await createRFQ({
+        buyer_email,
+        produce_type,
+        requested_quantity_kg: 1000,
+        buyer_name,
+        company,
+      });
+
+      setDone(true);
+      setTimeout(() => close(), 1800);
+    } catch (submitError) {
+      setError(submitError instanceof Error ? submitError.message : "Could not submit your request right now.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -589,12 +615,23 @@ function TradeModal({ close }: { close: () => void }) {
         <h2 className="mt-2 text-3xl font-black tracking-[-0.04em] text-white">Get live wholesale pricing.</h2>
         <p className="mt-3 text-sm text-[#c9dcd4]">Tell us where you buy and what you source. Your trade desk will respond with verified availability.</p>
 
-        <form onSubmit={submit} className="mt-6 grid gap-3">
-          <input required placeholder="Full name" className="rounded-2xl border border-white/10 bg-[#0d201b] px-3 py-3.5 text-sm text-white outline-none transition focus:border-[#b7ff77]" />
-          <input required type="email" placeholder="Business email" className="rounded-2xl border border-white/10 bg-[#0d201b] px-3 py-3.5 text-sm text-white outline-none transition focus:border-[#b7ff77]" />
-          <input required placeholder="Company / importing market" className="rounded-2xl border border-white/10 bg-[#0d201b] px-3 py-3.5 text-sm text-white outline-none transition focus:border-[#b7ff77]" />
-          <button className="mt-2 rounded-full bg-[#b7ff77] px-5 py-3.5 text-sm font-bold text-[#061b14]">Request trade access</button>
-        </form>
+        {done ? (
+          <div className="mt-6 rounded-2xl border border-[#b7ff77]/20 bg-[#b7ff77]/10 p-5 text-sm text-[#dfeae6]">
+            <p className="font-semibold text-[#b7ff77]">Request submitted successfully.</p>
+            <p className="mt-2">A trade desk agent will follow up with your quote shortly.</p>
+          </div>
+        ) : (
+          <form onSubmit={submit} className="mt-6 grid gap-3">
+            <input required name="name" placeholder="Full name" className="rounded-2xl border border-white/10 bg-[#0d201b] px-3 py-3.5 text-sm text-white outline-none transition focus:border-[#b7ff77]" />
+            <input required name="email" type="email" placeholder="Business email" className="rounded-2xl border border-white/10 bg-[#0d201b] px-3 py-3.5 text-sm text-white outline-none transition focus:border-[#b7ff77]" />
+            <input required name="company" placeholder="Company / importing market" className="rounded-2xl border border-white/10 bg-[#0d201b] px-3 py-3.5 text-sm text-white outline-none transition focus:border-[#b7ff77]" />
+            <input name="produce" defaultValue="Hass Avocado" className="rounded-2xl border border-white/10 bg-[#0d201b] px-3 py-3.5 text-sm text-white outline-none transition focus:border-[#b7ff77]" />
+            {error && <p className="text-sm text-[#ffb7b7]">{error}</p>}
+            <button type="submit" disabled={isSubmitting} className="mt-2 rounded-full bg-[#b7ff77] px-5 py-3.5 text-sm font-bold text-[#061b14] disabled:opacity-60">
+              {isSubmitting ? "Submitting..." : "Request trade access"}
+            </button>
+          </form>
+        )}
       </motion.div>
     </motion.div>
   );
@@ -602,10 +639,51 @@ function TradeModal({ close }: { close: () => void }) {
 
 function FarmerModal({ close }: { close: () => void }) {
   const [done, setDone] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const submit = (e: FormEvent) => {
+  const submit = async (e: FormEvent) => {
     e.preventDefault();
-    setDone(true);
+    setIsSubmitting(true);
+    setError(null);
+
+    const form = e.currentTarget as HTMLFormElement;
+    const formData = new FormData(form);
+
+    try {
+      const farmName = String(formData.get("farm_name") || "").trim();
+      const owner_name = String(formData.get("owner_name") || "").trim();
+      const phone = String(formData.get("phone") || "").trim();
+      const produce_type = String(formData.get("produce") || "Hass Avocado").trim();
+      const quantity_kg = Number(formData.get("yield") || 0);
+      const harvest_date = String(formData.get("harvest_date") || "");
+
+      if (!farmName || !owner_name || !phone || !harvest_date || !quantity_kg) {
+        throw new Error("Please complete all required fields.");
+      }
+
+      await createFarm({
+        name: farmName,
+        owner_name,
+        latitude: 0,
+        longitude: 0,
+        size_hectares: Number(quantity_kg) / 1000 || 1,
+      });
+
+      await createRFQ({
+        buyer_email: `${phone}@farmer.local`,
+        produce_type,
+        requested_quantity_kg: quantity_kg,
+        lot_id: null,
+      });
+
+      setDone(true);
+      setTimeout(() => close(), 1800);
+    } catch (submitError) {
+      setError(submitError instanceof Error ? submitError.message : "Could not register your farm right now.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -621,230 +699,31 @@ function FarmerModal({ close }: { close: () => void }) {
         <p className="mt-3 text-sm text-[#c9dcd4]">Mobile-first intake for farmer groups, aggregators, and field agents.</p>
 
         {done ? (
-          <div className="mt-6 rounded-2xl border border-[#b7ff77]/25 bg-[#b7ff77]/10 p-5 text-sm text-[#dfeae6]">
+          <div className="mt-6 rounded-2xl border border-[#b7ff77]/20 bg-[#b7ff77]/10 p-5 text-sm text-[#dfeae6]">
             <p className="font-semibold text-[#b7ff77]">Harvest registration received.</p>
             <p className="mt-2">A trade desk agent will review and follow up through SMS or WhatsApp.</p>
           </div>
         ) : (
           <form onSubmit={submit} className="mt-6 grid gap-3 sm:grid-cols-2">
-            <input required placeholder="Farmer / group name" className="input-aero sm:col-span-2" />
-            <input required placeholder="Phone number" type="tel" className="input-aero" />
-            <input required placeholder="County / location" className="input-aero" />
-            <select className="input-aero">
+            <input required name="farm_name" placeholder="Farmer / group name" className="input-aero sm:col-span-2" />
+            <input required name="owner_name" placeholder="Contact name" className="input-aero" />
+            <input required name="phone" placeholder="Phone number" type="tel" className="input-aero" />
+            <select name="produce" className="input-aero">
               <option>Hass avocado</option>
               <option>Fuerte avocado</option>
               <option>Fine beans</option>
               <option>Snow peas</option>
-              <option>Naturally dried commodity</option>
+              <option>Other</option>
             </select>
-            <input required placeholder="Estimated yield (kg)" type="number" min="1" className="input-aero" />
-            <input required type="date" className="input-aero" />
-            <button className="mt-2 rounded-full bg-[#b7ff77] px-5 py-3.5 text-sm font-bold text-[#061b14] sm:col-span-2">Register availability</button>
+            <input required name="yield" placeholder="Estimated yield (kg)" type="number" min="1" className="input-aero" />
+            <input required name="harvest_date" type="date" className="input-aero" />
+            {error && <p className="sm:col-span-2 text-sm text-[#ffb7b7]">{error}</p>}
+            <button type="submit" disabled={isSubmitting} className="mt-2 rounded-full bg-[#b7ff77] px-5 py-3.5 text-sm font-bold text-[#061b14] sm:col-span-2 disabled:opacity-60">
+              {isSubmitting ? "Registering..." : "Register availability"}
+            </button>
           </form>
         )}
       </motion.div>
     </motion.div>
   );
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
